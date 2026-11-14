@@ -53,10 +53,36 @@ def _pick_caption_track(info: dict) -> str | None:
     return None
 
 
-def fetch_info(url: str) -> SourceInfo:
+BROWSERS = ("chrome", "safari", "firefox", "edge", "brave", "chromium", "opera", "vivaldi")
+BOT_CHECK_HINT = (
+    "YouTube wants a signed-in browser before it allows downloads. In the app, "
+    "open Setup, choose the browser you are signed in to YouTube with under "
+    "'YouTube sign-in', save, and try again."
+)
+
+
+def _base_opts(cookies_browser: str = "") -> dict:
+    opts = {"quiet": True, "no_warnings": True}
+    if cookies_browser in BROWSERS:
+        opts["cookiesfrombrowser"] = (cookies_browser,)
+    return opts
+
+
+def explain(error: Exception) -> str:
+    """Turn a yt-dlp error into something a person can act on."""
+    text = str(error)
+    if "not a bot" in text or "Sign in to confirm" in text:
+        return f"{text}\n\n{BOT_CHECK_HINT}"
+    if "could not find" in text.lower() and "cookies" in text.lower():
+        return (f"{text}\n\nThe browser chosen under 'YouTube sign-in' has no "
+                "YouTube cookies. Pick the browser you actually use YouTube in.")
+    return text
+
+
+def fetch_info(url: str, cookies_browser: str = "") -> SourceInfo:
     import yt_dlp
 
-    with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "skip_download": True}) as ydl:
+    with yt_dlp.YoutubeDL({**_base_opts(cookies_browser), "skip_download": True}) as ydl:
         info = ydl.extract_info(url, download=False)
         transcript: list[Line] = []
         track = _pick_caption_track(info)
@@ -76,14 +102,14 @@ def fetch_info(url: str) -> SourceInfo:
     )
 
 
-def download_section(url: str, start: float, end: float, out: Path) -> Path:
+def download_section(url: str, start: float, end: float, out: Path,
+                     cookies_browser: str = "") -> Path:
     """Download only [start, end] of the video as an mp4."""
     import yt_dlp
     from yt_dlp.utils import download_range_func
 
     opts = {
-        "quiet": True,
-        "no_warnings": True,
+        **_base_opts(cookies_browser),
         "format": "bv*[height<=1080]+ba/b[height<=1080]/b",
         "download_ranges": download_range_func(None, [(start, end)]),
         "force_keyframes_at_cuts": True,

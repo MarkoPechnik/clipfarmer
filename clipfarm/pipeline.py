@@ -12,7 +12,7 @@ from .character import Character, render_panel
 from .compose import compose, probe
 from .config import Settings
 from .moments import make_plan
-from .source import Line, SourceInfo, download_section, fetch_info
+from .source import Line, SourceInfo, download_section, explain, fetch_info
 
 
 def produce(info: SourceInfo, s: Settings, local_clip: Path | None = None) -> Path:
@@ -24,7 +24,11 @@ def produce(info: SourceInfo, s: Settings, local_clip: Path | None = None) -> Pa
     print(f"  plan ({plan.planner}): {plan.start:.1f}s-{plan.end:.1f}s, "
           f"{len(plan.reactions)} reactions")
 
-    clip = local_clip or download_section(info.url, plan.start, plan.end, work / "source.mp4")
+    try:
+        clip = local_clip or download_section(info.url, plan.start, plan.end,
+                                              work / "source.mp4", s.cookies_browser)
+    except Exception as e:
+        raise RuntimeError(explain(e)) from None
     duration, has_audio = probe(clip)
 
     lines = voice.synthesize(plan.reactions, work, s)
@@ -55,7 +59,10 @@ def produce(info: SourceInfo, s: Settings, local_clip: Path | None = None) -> Pa
 
 def make_from_url(url: str, s: Settings) -> Path:
     print(f"> {url}")
-    info = fetch_info(url)
+    try:
+        info = fetch_info(url, s.cookies_browser)
+    except Exception as e:
+        raise RuntimeError(explain(e)) from None
     print(f"  {info.title!r} by {info.channel} "
           f"({info.duration:.0f}s, {len(info.transcript)} caption lines)")
     return produce(info, s)

@@ -81,8 +81,18 @@
       <div><label>Anthropic API key (optional) <span class="pill" id="k-ANTHROPIC_API_KEY"></span></label>
         <input type="password" id="in-ANTHROPIC_API_KEY" autocomplete="off" placeholder="smarter reactions"></div>
     </div>
+    <div class="keys">
+      <div><label for="cookies">YouTube sign-in <span class="pill" id="k-cookies"></span></label>
+        <select id="cookies">
+          <option value="">Not needed</option><option value="chrome">Chrome</option>
+          <option value="safari">Safari</option><option value="firefox">Firefox</option>
+          <option value="edge">Edge</option><option value="brave">Brave</option>
+        </select></div>
+      <p class="hint" style="grid-column: span 2; margin: 18px 0 0">Only if a clip fails with
+        "Sign in to confirm you're not a bot": pick the browser you're signed in to YouTube with.</p>
+    </div>
     <div class="row" style="align-items:center">
-      <button id="save-keys">Save keys</button>
+      <button id="save-keys">Save</button>
       <button class="ghost" id="demo">Make a test clip (no keys needed)</button>
       <span class="msg" id="keys-msg" style="margin:0"></span>
     </div>
@@ -146,7 +156,8 @@ const post = async (path, body) => {
 };
 const say = (id, text, err) => { $(id).textContent = text; $(id).classList.toggle('err', !!err); };
 const KEYS = ['YOUTUBE_API_KEY', 'ELEVENLABS_API_KEY', 'ANTHROPIC_API_KEY'];
-let videos = [], autoOn = false, clipSig = '';
+let videos = [], autoOn = false, clipSig = '', cookiesTouched = false;
+$('cookies').onchange = () => { cookiesTouched = true; };
 
 async function refresh() {
   let s;
@@ -160,11 +171,17 @@ async function refresh() {
   $('auto-btn').className = autoOn ? 'ghost' : '';
   if (s.auto.message) say('auto-msg', s.auto.message, s.auto.message.startsWith('Scan failed'));
 
-  $('jobs').innerHTML = s.jobs.length ? s.jobs.map(j => {
+  if (!cookiesTouched) $('cookies').value = s.cookies_browser || '';
+  $('k-cookies').textContent = s.cookies_browser ? 'on' : 'off';
+  $('k-cookies').className = 'pill ' + (s.cookies_browser ? 'ok' : 'no');
+
+  const stuck = !s.worker_alive && s.jobs.some(j => j.status === 'queued');
+  $('jobs').innerHTML = (stuck ? '<p class="msg err">The clip maker is not running. Check the terminal window for an error and send it to Claude.</p>' : '') +
+    (s.jobs.length ? s.jobs.map(j => {
     const cls = {done: 'ok', failed: 'bad'}[j.status] || 'no';
     return `<div class="job"><strong>${esc(j.label)}</strong><span class="pill ${cls}">${j.status}</span>` +
            (j.log ? `<pre>${esc(j.log.trim())}</pre>` : '') + `</div>`;
-  }).join('') : '<p class="empty">Nothing running. Clips take about a minute each.</p>';
+  }).join('') : '<p class="empty">Nothing running. Clips take about a minute each.</p>');
 
   // Only rebuild the gallery when it changes, so playing videos are not reset.
   const sig = s.clips.map(c => c.id + c.made).join('|');
@@ -184,12 +201,12 @@ async function refresh() {
 }
 
 $('save-keys').onclick = async () => {
-  const body = {};
+  const body = {cookies_browser: $('cookies').value};
   for (const k of KEYS) if ($('in-' + k).value.trim()) body[k] = $('in-' + k).value;
-  if (!Object.keys(body).length) return say('keys-msg', 'Paste at least one key first.', true);
   const r = await post('/api/settings', body);
   if (r.error) return say('keys-msg', r.error, true);
   for (const k of KEYS) $('in-' + k).value = '';
+  cookiesTouched = false;
   say('keys-msg', 'Saved.');
   refresh();
 };

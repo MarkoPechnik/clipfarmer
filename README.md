@@ -31,6 +31,13 @@ Everything happens in the browser:
 
 Finished clips appear at the bottom to watch, download, and copy a caption.
 
+If a clip fails with **"Sign in to confirm you're not a bot"**, pick the
+browser you're signed in to YouTube with under **Setup → YouTube sign-in** and
+save. The app then borrows that browser's YouTube cookies for downloads. On a
+Mac, Chrome asks for your keychain password the first time, and Safari needs
+the Terminal app to have Full Disk Access (System Settings → Privacy &
+Security).
+
 | Key | Used for | Without it |
 | --- | --- | --- |
 | `YOUTUBE_API_KEY` | finding new, fast-rising videos | `discover`, `run`, `watch` do not work; `make <url>` still does |

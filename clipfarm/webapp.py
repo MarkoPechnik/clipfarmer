@@ -13,6 +13,7 @@ import queue
 import sys
 import threading
 import time
+import traceback
 import uuid
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from flask import Flask, abort, jsonify, request, send_file
 
 from .config import Settings
 from .discover import find_trending
+from .source import BROWSERS
 
 STATIC = Path(__file__).parent / "static"
 KEYS = ("YOUTUBE_API_KEY", "ELEVENLABS_API_KEY", "ANTHROPIC_API_KEY")
@@ -51,14 +53,20 @@ class _JobLog:
     def flush(self):
         self.real.flush()
 
+    def __getattr__(self, name):  # isatty, encoding, fileno, ... from the real stream
+        return getattr(self.real, name)
+
 
 _log = _JobLog(sys.stdout)
+_worker_thread: threading.Thread | None = None
+_worker_lock = threading.Lock()
 
 
 def _worker():
-    from . import pipeline
+    from . import pipeline  # already imported by serve(); cheap here
 
     _log.thread = threading.current_thread()
+    print("[worker] ready for jobs")
     while True:
         job_id, target = job_queue.get()
         job = jobs[job_id]
@@ -69,11 +77,23 @@ def _worker():
             final = pipeline.demo(s) if target == "demo" else pipeline.make_from_url(target, s)
             job["clip"] = final.parent.name
             job["status"] = "done"
-        except Exception as e:
-            job["log"] += f"\nFailed: {e}\n"
+        except BaseException as e:  # never let one bad job kill the worker
+            detail = str(e) or type(e).__name__
+            if not isinstance(e, RuntimeError):
+                detail = traceback.format_exc()
+            job["log"] += f"\nFailed: {detail}\n"
             job["status"] = "failed"
         finally:
             _log.job_id = None
+
+
+def _ensure_worker() -> None:
+    """Start the worker, or restart it if it has died."""
+    global _worker_thread
+    with _worker_lock:
+        if _worker_thread is None or not _worker_thread.is_alive():
+            _worker_thread = threading.Thread(target=_worker, daemon=True, name="clipfarm-worker")
+            _worker_thread.start()
 
 
 def enqueue(target: str, label: str) -> dict:
@@ -81,6 +101,7 @@ def enqueue(target: str, label: str) -> dict:
            "clip": None, "created": time.time()}
     jobs[job["id"]] = job
     job_queue.put((job["id"], target))
+    _ensure_worker()
     return job
 
 
@@ -122,7 +143,10 @@ def _auto_loop():
 def _save_env(values: dict[str, str]) -> None:
     lines = ENV_FILE.read_text().splitlines() if ENV_FILE.exists() else []
     for key, value in values.items():
-        os.environ[key] = value
+        if value:
+            os.environ[key] = value
+        else:
+            os.environ.pop(key, None)
         for i, line in enumerate(lines):
             if line.split("=", 1)[0].strip() == key:
                 lines[i] = f"{key}={value}"
@@ -154,6 +178,8 @@ def state():
     s = Settings.from_env()
     return jsonify(
         keys={k: bool(os.environ.get(k)) for k in KEYS},
+        cookies_browser=s.cookies_browser,
+        worker_alive=bool(_worker_thread and _worker_thread.is_alive()),
         jobs=sorted(jobs.values(), key=lambda j: j["created"], reverse=True)[:20],
         clips=_clips(s),
         auto=auto,
@@ -166,6 +192,11 @@ def settings():
     values = {k: body[k].strip() for k in KEYS if isinstance(body.get(k), str) and body[k].strip()}
     if any("\n" in v or "\r" in v for v in values.values()):
         abort(400)
+    if "cookies_browser" in body:
+        browser = str(body["cookies_browser"]).strip().lower()
+        if browser and browser not in BROWSERS:
+            abort(400)
+        values["CLIPFARM_COOKIES_BROWSER"] = browser
     if values:
         _save_env(values)
     return jsonify(ok=True)
@@ -226,8 +257,13 @@ def media(clip_id: str):
 
 
 def serve(port: int = 8000) -> None:
+    # Import the whole pipeline here, on the main thread, so a missing
+    # dependency stops the app with a clear message instead of silently
+    # killing the background worker.
+    from . import pipeline  # noqa: F401
+
     sys.stdout = _log
-    threading.Thread(target=_worker, daemon=True).start()
+    _ensure_worker()
     threading.Thread(target=_auto_loop, daemon=True).start()
     print(f"clipfarm is running: open http://127.0.0.1:{port}")
     app.run(host="127.0.0.1", port=port, threaded=True)

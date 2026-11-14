@@ -40,6 +40,9 @@ class Settings:
     output_dir: Path = Path("output")
     clip_seconds: float = 30.0
     character_name: str = "Gaspy"
+    # Browser to borrow YouTube sign-in cookies from (chrome, safari, firefox,
+    # edge, brave). Needed when YouTube says "Sign in to confirm you're not a bot".
+    cookies_browser: str = ""
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -54,4 +57,5 @@ class Settings:
             output_dir=Path(env("CLIPFARM_OUTPUT", "output")),
             clip_seconds=float(env("CLIPFARM_CLIP_SECONDS", "30")),
             character_name=env("CLIPFARM_CHARACTER_NAME", cls.character_name),
+            cookies_browser=env("CLIPFARM_COOKIES_BROWSER", "").strip().lower(),
         )
