@@ -103,6 +103,13 @@ def cmd_demo(args, s: Settings) -> int:
     return 0
 
 
+def cmd_app(args, s: Settings) -> int:
+    from .webapp import serve
+
+    serve(args.port)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="clipfarm", description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
@@ -114,6 +121,10 @@ def main(argv: list[str] | None = None) -> int:
         sp.add_argument("--query", help="optional search terms to narrow the niche")
         sp.add_argument("--creative-commons", action="store_true",
                         help="only videos under a Creative Commons licence")
+
+    sp = sub.add_parser("app", help="open the web app (start here)")
+    sp.add_argument("--port", type=int, default=8000)
+    sp.set_defaults(func=cmd_app)
 
     sp = sub.add_parser("discover", help="list the fastest-rising new videos")
     add_discovery(sp)

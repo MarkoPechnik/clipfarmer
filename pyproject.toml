@@ -9,6 +9,7 @@ dependencies = [
     "pillow>=10.0",
     "numpy>=1.26",
     "anthropic>=0.60",
+    "flask>=3.0",
 ]
 
 [project.optional-dependencies]
@@ -23,6 +24,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["clipfarm"]
+
+[tool.setuptools.package-data]
+clipfarm = ["static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

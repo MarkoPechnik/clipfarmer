@@ -10,15 +10,26 @@ discover ──> plan ──> download ──> voice ──> animate ──> com
 YouTube API  Claude   yt-dlp       ElevenLabs Pillow     ffmpeg
 ```
 
-## Setup
+## Start the app
 
 Needs Python 3.10+ and `ffmpeg` on your PATH.
 
 ```bash
 pip install -e .
-cp .env.example .env    # then fill in the keys
-clipfarm demo           # offline test, no keys needed -> output/demo/final.mp4
+clipfarm app            # then open http://127.0.0.1:8000
 ```
+
+![The clipfarm app](app-screenshot.png)
+
+Everything happens in the browser:
+
+1. **Setup** — paste your API keys (saved to `.env` on your computer), or click
+   **Make a test clip** to try it with no keys at all.
+2. **Find videos** — scan for videos posted in the last 10 minutes to 24 hours,
+   then click **Make clip** on any of them, or paste a YouTube link.
+3. **Auto-farm** — keeps scanning on a timer and clips the top new video.
+
+Finished clips appear at the bottom to watch, download, and copy a caption.
 
 | Key | Used for | Without it |
 | --- | --- | --- |
@@ -26,7 +37,9 @@ clipfarm demo           # offline test, no keys needed -> output/demo/final.mp4
 | `ELEVENLABS_API_KEY` | the reaction voice | a placeholder blip is used instead of speech |
 | `ANTHROPIC_API_KEY` | Claude reads the transcript, picks the moment and writes reactions to what was said | keyword heuristic and canned lines ("Oh my god!", "Wait, WHAT?!") |
 
-## Usage
+## Command line
+
+The same pipeline without the browser:
 
 ```bash
 clipfarm discover --window 60          # fastest risers posted in the last hour
