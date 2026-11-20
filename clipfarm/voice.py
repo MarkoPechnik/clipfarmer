@@ -20,6 +20,7 @@ _V3_TAGS = {
     "shock": "[shocked]",
     "laugh": "[laughs]",
     "cringe": "[sighs]",
+    "hype": "[excited]",
 }
 
 

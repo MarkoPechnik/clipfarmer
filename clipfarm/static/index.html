@@ -67,7 +67,7 @@
 <main>
   <header>
     <div class="blob" aria-hidden="true">😮</div>
-    <div><h1>clipfarm</h1><p>Fast-rising YouTube videos → reaction clips</p></div>
+    <div><h1>clipfarm</h1><p>Your GTA gameplay → commentated shorts</p></div>
   </header>
 
   <section>
@@ -75,11 +75,11 @@
     <p class="hint">Paste your keys once. They are saved to a <code>.env</code> file on this computer and never shown again.</p>
     <div class="keys">
       <div><label>YouTube API key <span class="pill" id="k-YOUTUBE_API_KEY"></span></label>
-        <input type="password" id="in-YOUTUBE_API_KEY" autocomplete="off" placeholder="finds trending videos"></div>
+        <input type="password" id="in-YOUTUBE_API_KEY" autocomplete="off" placeholder="only for section 3"></div>
       <div><label>ElevenLabs API key <span class="pill" id="k-ELEVENLABS_API_KEY"></span></label>
         <input type="password" id="in-ELEVENLABS_API_KEY" autocomplete="off" placeholder="the reaction voice"></div>
       <div><label>Anthropic API key (optional) <span class="pill" id="k-ANTHROPIC_API_KEY"></span></label>
-        <input type="password" id="in-ANTHROPIC_API_KEY" autocomplete="off" placeholder="smarter reactions"></div>
+        <input type="password" id="in-ANTHROPIC_API_KEY" autocomplete="off" placeholder="writes the commentary"></div>
     </div>
     <div class="keys">
       <div><label for="cookies">YouTube sign-in <span class="pill" id="k-cookies"></span></label>
@@ -99,8 +99,37 @@
   </section>
 
   <section>
-    <h2>2. Find videos</h2>
-    <p class="hint">Videos posted inside the window, ranked by how fast they are gaining views.</p>
+    <h2>2. GTA shorts from your gameplay</h2>
+    <p class="hint">Upload GTA footage you recorded yourself. The app finds the best moments,
+      writes commentary about what happens, voices it and adds captions. Your own footage plus
+      commentary is original content, which is what YouTube needs for monetization.</p>
+    <div class="row">
+      <div class="grow"><label for="footage-file">Upload recordings</label>
+        <input type="file" id="footage-file" accept="video/*,.mkv" multiple></div>
+      <button id="upload">Upload</button>
+    </div>
+    <div class="msg" id="upload-msg"></div>
+    <div class="row" style="margin-top:6px">
+      <div><label for="gta-style">Commentary style</label>
+        <select id="gta-style"><option value="hype">Hype play-by-play</option>
+          <option value="funny">Funny / roast</option><option value="story">Story narration</option></select></div>
+      <div><label for="gta-layout">Layout</label>
+        <select id="gta-layout"><option value="fullscreen">Full-screen gameplay + captions</option>
+          <option value="character">Cartoon character on top</option></select></div>
+      <div><label for="gta-count">Shorts per recording</label>
+        <select id="gta-count"><option>1</option><option>2</option><option selected>3</option><option>5</option></select></div>
+    </div>
+    <div class="scroll"><table id="footage-table">
+      <thead><tr><th>Your recordings</th><th class="num">Size</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="msg" id="gta-msg"></div>
+  </section>
+
+  <section>
+    <h2>3. React to YouTube videos</h2>
+    <p class="hint">Videos posted inside the window, ranked by how fast they are gaining views.
+      Only use videos you have permission to repost.</p>
     <div class="row">
       <div><label for="window">Posted in the last</label>
         <select id="window"><option value="10">10 minutes</option><option value="30">30 minutes</option>
@@ -124,7 +153,7 @@
   </section>
 
   <section>
-    <h2>3. Auto-farm</h2>
+    <h2>4. Auto-farm YouTube</h2>
     <p class="hint">Keeps scanning with the settings above and makes a clip from the top new video each time. Runs while this app is open.</p>
     <div class="row">
       <div><label for="interval">Scan every</label>
@@ -156,7 +185,7 @@ const post = async (path, body) => {
 };
 const say = (id, text, err) => { $(id).textContent = text; $(id).classList.toggle('err', !!err); };
 const KEYS = ['YOUTUBE_API_KEY', 'ELEVENLABS_API_KEY', 'ANTHROPIC_API_KEY'];
-let videos = [], autoOn = false, clipSig = '', cookiesTouched = false;
+let videos = [], autoOn = false, clipSig = '', cookiesTouched = false, footageSig = null;
 $('cookies').onchange = () => { cookiesTouched = true; };
 
 async function refresh() {
@@ -182,6 +211,16 @@ async function refresh() {
     return `<div class="job"><strong>${esc(j.label)}</strong><span class="pill ${cls}">${j.status}</span>` +
            (j.log ? `<pre>${esc(j.log.trim())}</pre>` : '') + `</div>`;
   }).join('') : '<p class="empty">Nothing running. Clips take about a minute each.</p>');
+
+  const fsig = s.footage.map(f => f.name + f.mb).join('|');
+  if (fsig !== footageSig) {
+    footageSig = fsig;
+    $('footage-table').tBodies[0].innerHTML = s.footage.length ? s.footage.map(f => `
+      <tr><td>${esc(f.name)}</td><td class="num">${f.mb.toLocaleString()} MB</td>
+      <td class="num"><button data-file="${esc(f.name)}">Make shorts</button></td></tr>`).join('')
+      : `<tr><td colspan="2" class="empty">No recordings yet. Upload one above, or try it out first:</td>
+         <td class="num"><button class="ghost" data-file="test-gameplay.mp4">Use test footage</button></td></tr>`;
+  }
 
   // Only rebuild the gallery when it changes, so playing videos are not reset.
   const sig = s.clips.map(c => c.id + c.made).join('|');
@@ -255,6 +294,36 @@ $('clips').onclick = async e => {
   try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'Copied'; }
   catch { b.textContent = 'Copy failed'; }
   setTimeout(() => b.textContent = 'Copy caption', 1500);
+};
+
+$('upload').onclick = () => {
+  const files = $('footage-file').files;
+  if (!files.length) return say('upload-msg', 'Choose one or more video files first.', true);
+  const form = new FormData();
+  for (const f of files) form.append('files', f);
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/footage');
+  $('upload').disabled = true;
+  xhr.upload.onprogress = e => { if (e.lengthComputable) say('upload-msg', `Uploading… ${Math.round(100 * e.loaded / e.total)}%`); };
+  xhr.onload = () => {
+    $('upload').disabled = false;
+    let r = {}; try { r = JSON.parse(xhr.responseText); } catch {}
+    if (xhr.status !== 200) return say('upload-msg', r.error || 'Upload failed.', true);
+    $('footage-file').value = '';
+    say('upload-msg', `Uploaded ${r.saved.join(', ')}. Click Make shorts below.`);
+    refresh();
+  };
+  xhr.onerror = () => { $('upload').disabled = false; say('upload-msg', 'Upload failed: is the app still running?', true); };
+  xhr.send(form);
+};
+
+$('footage-table').onclick = async e => {
+  const b = e.target.closest('button[data-file]'); if (!b) return;
+  const r = await post('/api/gta', {file: b.dataset.file, style: $('gta-style').value,
+                                    layout: $('gta-layout').value, count: +$('gta-count').value});
+  if (r.error) return say('gta-msg', r.error, true);
+  say('gta-msg', 'Queued, see Jobs below. Each short takes about a minute.');
+  refresh();
 };
 
 refresh(); setInterval(refresh, 2000);

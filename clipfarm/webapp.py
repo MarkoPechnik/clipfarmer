@@ -29,7 +29,8 @@ ENV_FILE = Path(".env")
 
 app = Flask(__name__, static_folder=None)
 jobs: dict[str, dict] = {}       # id -> {id, label, status, log, clip, created}
-job_queue: "queue.Queue[tuple[str, str]]" = queue.Queue()
+job_queue: "queue.Queue[tuple[str, str | dict]]" = queue.Queue()
+TEST_FOOTAGE = "test-gameplay.mp4"
 auto = {"on": False, "interval": 15, "window": 60, "region": "US", "query": "",
         "last_scan": None, "message": ""}
 _auto_wake = threading.Event()
@@ -74,7 +75,20 @@ def _worker():
         _log.job_id = job_id
         try:
             s = Settings.from_env()
-            final = pipeline.demo(s) if target == "demo" else pipeline.make_from_url(target, s)
+            if isinstance(target, dict):  # GTA shorts from uploaded footage
+                from . import gameplay
+
+                path = s.footage_dir / target["file"]
+                if target["file"] == TEST_FOOTAGE and not path.exists():
+                    print("Creating test footage...")
+                    gameplay.make_test_footage(path)
+                finals = gameplay.make_shorts(path, s, target["count"], target["style"],
+                                              target["layout"])
+                final = finals[-1]
+            elif target == "demo":
+                final = pipeline.demo(s)
+            else:
+                final = pipeline.make_from_url(target, s)
             job["clip"] = final.parent.name
             job["status"] = "done"
         except BaseException as e:  # never let one bad job kill the worker
@@ -96,7 +110,7 @@ def _ensure_worker() -> None:
             _worker_thread.start()
 
 
-def enqueue(target: str, label: str) -> dict:
+def enqueue(target: str | dict, label: str) -> dict:
     job = {"id": uuid.uuid4().hex[:8], "label": label, "status": "queued", "log": "",
            "clip": None, "created": time.time()}
     jobs[job["id"]] = job
@@ -168,6 +182,53 @@ def _clips(s: Settings) -> list[dict]:
     return sorted(out, key=lambda c: c["made"], reverse=True)
 
 
+def _footage(s: Settings) -> list[dict]:
+    from .gameplay import VIDEO_EXTS
+
+    if not s.footage_dir.is_dir():
+        return []
+    files = [p for p in s.footage_dir.iterdir() if p.suffix.lower() in VIDEO_EXTS]
+    return [{"name": p.name, "mb": round(p.stat().st_size / 1e6, 1)}
+            for p in sorted(files, key=lambda p: p.stat().st_mtime, reverse=True)]
+
+
+@app.post("/api/footage")
+def upload_footage():
+    from werkzeug.utils import secure_filename
+
+    from .gameplay import VIDEO_EXTS
+
+    s = Settings.from_env()
+    s.footage_dir.mkdir(parents=True, exist_ok=True)
+    saved = []
+    for f in request.files.getlist("files"):
+        name = secure_filename(f.filename or "")
+        if not name or Path(name).suffix.lower() not in VIDEO_EXTS:
+            return jsonify(error=f"{f.filename}: upload a video file (mp4, mov, mkv, webm)."), 400
+        f.save(s.footage_dir / name)
+        saved.append(name)
+    if not saved:
+        return jsonify(error="Choose at least one video file."), 400
+    return jsonify(saved=saved)
+
+
+@app.post("/api/gta")
+def make_gta():
+    from .gameplay import LAYOUTS, STYLES
+
+    body = request.get_json(force=True)
+    s = Settings.from_env()
+    name = str(body.get("file", ""))
+    style, layout = body.get("style", "hype"), body.get("layout", "fullscreen")
+    count = int(body.get("count", 3))
+    if style not in STYLES or layout not in LAYOUTS or not 1 <= count <= 10:
+        return jsonify(error="Pick a style, layout and count."), 400
+    if name != TEST_FOOTAGE and name not in {f["name"] for f in _footage(s)}:
+        return jsonify(error="That recording is not in the footage folder."), 400
+    label = f"{count} {style} short{'s' if count > 1 else ''} from {name}"
+    return jsonify(enqueue({"file": name, "count": count, "style": style, "layout": layout}, label))
+
+
 @app.get("/")
 def index():
     return send_file(STATIC / "index.html")
@@ -180,6 +241,7 @@ def state():
         keys={k: bool(os.environ.get(k)) for k in KEYS},
         cookies_browser=s.cookies_browser,
         worker_alive=bool(_worker_thread and _worker_thread.is_alive()),
+        footage=_footage(s),
         jobs=sorted(jobs.values(), key=lambda j: j["created"], reverse=True)[:20],
         clips=_clips(s),
         auto=auto,

@@ -1,14 +1,12 @@
 # clipfarm
 
-Finds YouTube videos that were posted in the last few minutes and are gaining
-views fastest, cuts the best ~30 seconds, and turns it into a vertical
-(1080x1920) reaction clip: an animated cartoon character sits above the video
-and reacts out loud, voiced by ElevenLabs.
+Turns your own GTA gameplay recordings into commentated vertical shorts
+(1080x1920). Upload a recording and the app finds the best moments, has Claude
+write commentary about what actually happens on screen, voices it with
+ElevenLabs, and adds shorts-style captions.
 
-```
-discover ──> plan ──> download ──> voice ──> animate ──> compose
-YouTube API  Claude   yt-dlp       ElevenLabs Pillow     ffmpeg
-```
+It can also make reaction clips from fast-rising YouTube videos (section 3 in
+the app), but only use videos you have permission to repost.
 
 ## Start the app
 
@@ -25,9 +23,13 @@ Everything happens in the browser:
 
 1. **Setup** — paste your API keys (saved to `.env` on your computer), or click
    **Make a test clip** to try it with no keys at all.
-2. **Find videos** — scan for videos posted in the last 10 minutes to 24 hours,
-   then click **Make clip** on any of them, or paste a YouTube link.
-3. **Auto-farm** — keeps scanning on a timer and clips the top new video.
+2. **GTA shorts** — upload recordings, pick a commentary style (hype,
+   funny, or story narration) and a layout (full-screen gameplay with
+   captions, or the cartoon character on top), then click **Make shorts**.
+   No recordings yet? Click **Use test footage** to try it.
+3. **React to YouTube videos** — scan for videos posted in the last 10 minutes
+   to 24 hours, then click **Make clip**, or paste a YouTube link.
+4. **Auto-farm YouTube** — keeps scanning on a timer and clips the top new video.
 
 Finished clips appear at the bottom to watch, download, and copy a caption.
 
@@ -90,7 +92,20 @@ reaction poses (gasp, shock, laugh, cringe) plus idle breathing and blinking.
 The mouth follows the loudness of the voice track, so it moves in time with
 the speech. Rename it with `CLIPFARM_CHARACTER_NAME`.
 
-## Before you post
+## Monetization
+
+YouTube pays for original content. Your own gameplay plus commentary about
+what happens in it qualifies; reposting other people's clips (even with the
+facecam cropped out) does not, and can bring copyright claims. As far as we
+know, Rockstar allows monetizing GTA gameplay videos.
+
+Add an Anthropic key: without it the commentary falls back to a few generic
+template lines, which are fine for testing but are exactly the kind of
+repetitive content YouTube's monetization review rejects.
+
+From the command line: `clipfarm gta recording.mp4 --count 3 --style story`.
+
+## Before you post YouTube reaction clips
 
 Clips made from other people's videos are their content. Short commentary
 clips are common, but they can still draw copyright claims or strikes, and

@@ -103,6 +103,17 @@ def cmd_demo(args, s: Settings) -> int:
     return 0
 
 
+def cmd_gta(args, s: Settings) -> int:
+    from .gameplay import make_shorts
+
+    if args.seconds:
+        s.clip_seconds = args.seconds
+    for f in args.files:
+        for final in make_shorts(Path(f), s, args.count, args.style, args.layout):
+            print(f"  -> {final}")
+    return 0
+
+
 def cmd_app(args, s: Settings) -> int:
     from .webapp import serve
 
@@ -125,6 +136,14 @@ def main(argv: list[str] | None = None) -> int:
     sp = sub.add_parser("app", help="open the web app (start here)")
     sp.add_argument("--port", type=int, default=8000)
     sp.set_defaults(func=cmd_app)
+
+    sp = sub.add_parser("gta", help="make commentated shorts from your own GTA recordings")
+    sp.add_argument("files", nargs="+", help="video files you recorded")
+    sp.add_argument("--count", type=int, default=3, help="shorts per recording (default 3)")
+    sp.add_argument("--style", choices=["hype", "funny", "story"], default="hype")
+    sp.add_argument("--layout", choices=["fullscreen", "character"], default="fullscreen")
+    sp.add_argument("--seconds", type=float, help="length of each short (default 30)")
+    sp.set_defaults(func=cmd_gta)
 
     sp = sub.add_parser("discover", help="list the fastest-rising new videos")
     add_discovery(sp)

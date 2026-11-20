@@ -27,6 +27,8 @@ BG = {
     "shock": ((92, 22, 40), (176, 48, 60)),
     "laugh": ((96, 66, 10), (214, 150, 30)),
     "cringe": ((28, 62, 52), (60, 120, 96)),
+    "hype": ((110, 40, 10), (230, 110, 30)),
+    "talk": ((34, 30, 66), (70, 54, 130)),
 }
 _FONTS = [
     "/usr/share/fonts/opentype/inter/Inter-ExtraBold.otf",
@@ -94,6 +96,8 @@ class Character:
             cx += k * 9 * math.sin(2 * math.pi * 13 * t)
         elif e == "laugh":
             cy -= k * 20 * abs(math.sin(2 * math.pi * 4.5 * t))
+        elif e == "hype":
+            cy -= k * 12 * abs(math.sin(2 * math.pi * 2.5 * t))
         elif e == "gasp":
             cy -= k * 14
         elif e == "cringe":
@@ -135,7 +139,10 @@ class Character:
             self._ellipse(d, mx, my + ry * 0.4, rx, ry, fill=INK)
             if ry > 40:
                 self._ellipse(d, mx, my + ry * 1.05, rx * 0.62, ry * 0.3, fill=(255, 110, 130))
-        elif e == "laugh":
+        elif e == "talk":
+            ry = 8 + 40 * mouth * k
+            self._ellipse(d, mx, my + 6, 38, ry, fill=INK)
+        elif e in ("laugh", "hype"):
             h = (50 + 60 * mouth) * k + 10
             d.pieslice([(mx - 92) * S, (my - h) * S, (mx + 92) * S, (my + h) * S], 0, 180, fill=INK)
             d.pieslice([(mx - 50) * S, (my + h * 0.35) * S, (mx + 50) * S, (my + h * 1.25) * S], 180, 360, fill=(255, 110, 130))
